@@ -48,6 +48,10 @@ model Business {
   address                  String
   status                   String   @default("ACTIVE")
   whatsapp_phone_number_id String?
+  whatsapp_access_token    String?
+  whatsapp_waba_id         String?
+  chat_limit               Int      @default(100)
+  chat_count               Int      @default(0)
   created_at               DateTime @default(now())
   updated_at               DateTime @updatedAt
 
@@ -67,10 +71,12 @@ model User {
   id            String   @id @default(uuid())
   business_id   String
   name          String
-  email         String   @unique
-  password_hash String
-  role          String   @default("ADMIN")
-  created_at    DateTime @default(now())
+  email              String   @unique
+  password_hash      String
+  role               String   @default("ADMIN")
+  is_verified        Boolean  @default(false)
+  verification_token String?
+  created_at         DateTime @default(now())
 
   business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
 

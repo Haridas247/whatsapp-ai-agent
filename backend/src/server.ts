@@ -3,6 +3,7 @@ import cors from 'cors';
 import { config } from './config/env';
 import { webhookController } from './controllers/webhook.controller';
 import { apiController } from './controllers/api.controller';
+import { authController } from './controllers/auth.controller';
 import './services/reminder.worker'; // Initialize BullMQ reminder worker
 
 const app = express();
@@ -30,6 +31,11 @@ app.get(['/api/webhooks/whatsapp', '/webhooks/whatsapp'], (req, res) => {
 app.post(['/api/webhooks/whatsapp', '/webhooks/whatsapp'], async (req, res) => {
   await webhookController.handleInbound(req, res);
 });
+
+// Auth API Routes
+app.post('/api/auth/signup', (req, res) => authController.signup(req, res));
+app.post('/api/auth/login', (req, res) => authController.login(req, res));
+app.post('/api/auth/change-password', (req, res) => authController.changePassword(req, res));
 
 // Admin REST API Routes
 app.get('/api/dashboard/stats', (req, res) => apiController.getDashboardStats(req, res));

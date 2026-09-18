@@ -66,6 +66,8 @@ export class ApiController {
           category: biz.category,
           phone: biz.phone,
           address: biz.address,
+          chat_limit: biz.chat_limit,
+          chat_count: biz.chat_count,
         },
         metrics: {
           totalConversations,
