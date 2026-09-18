@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { whatsappService } from './whatsapp.service';
 import { scheduleAppointmentReminders } from './reminder.worker';
+import { emailService } from './email.service';
 import { addMinutes, format, parse, isAfter, startOfDay, endOfDay, addDays } from 'date-fns';
 
 export interface BookingStateData {
@@ -445,6 +446,32 @@ export class BookingService {
             await scheduleAppointmentReminders(appointment.id, startAt);
           } catch (remErr) {
             console.warn('[BookingService] Reminder scheduling notice:', remErr);
+          }
+
+          // Trigger Email Notifications (non-blocking)
+          try {
+            // Customer email (mocking email as customer.name @ example.com for demo)
+            const customerEmail = `${conv?.customer.name.replace(/\s+/g, '').toLowerCase() || 'customer'}@example.com`;
+            await emailService.sendCustomerConfirmation(
+              customerEmail,
+              conv!.customer.name,
+              stateData.serviceName!,
+              stateData.staffName!,
+              startAt,
+              conv!.business.name
+            );
+
+            // Admin email (mocking admin email)
+            const adminEmail = `admin@${conv!.business.name.replace(/\s+/g, '').toLowerCase()}.com`;
+            await emailService.sendAdminNotification(
+              adminEmail,
+              conv!.customer.name,
+              conv!.customer.phone,
+              stateData.serviceName!,
+              startAt
+            );
+          } catch (emailErr) {
+            console.error('[BookingService] Email notification failed:', emailErr);
           }
 
           // Reset conversation state

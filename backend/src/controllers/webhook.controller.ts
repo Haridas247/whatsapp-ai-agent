@@ -5,6 +5,7 @@ import { geminiService } from '../services/gemini.service';
 import { ragService } from '../services/rag.service';
 import { bookingService } from '../services/booking.service';
 import { handoffService } from '../services/handoff.service';
+import { emailService } from '../services/email.service';
 
 export class WebhookController {
   /**
@@ -88,6 +89,23 @@ export class WebhookController {
       }
 
       const businessId = business.id;
+
+      if (business.chat_count >= business.chat_limit) {
+        console.warn(`[Webhook] Business ${businessId} has reached chat limit (${business.chat_limit}).`);
+        const fallbackMsg = `⚠️ Our AI assistant is currently unavailable for ${business.name}. Please contact the clinic directly via phone.`;
+        await whatsappService.sendTextMessage(customerPhone, fallbackMsg);
+        
+        // Notify admin if exactly reached
+        if (business.chat_count === business.chat_limit) {
+           const firstUser = await prisma.user.findFirst({ where: { business_id: businessId, role: 'ADMIN' } });
+           if (firstUser) {
+             await emailService.sendLimitReachedNotification(firstUser.email, business.name, business.chat_limit);
+           }
+        }
+        
+        // Still increment so we don't send emails repeatedly if we only send on exact match, or we just don't increment.
+        return;
+      }
 
       // 2. Resolve Customer strictly scoped to active Business Tenant
       let customer = await prisma.customer.findFirst({
@@ -270,6 +288,7 @@ export class WebhookController {
         } else {
           await whatsappService.sendTextMessage(customerPhone, stateResult.replyText);
         }
+        await prisma.business.update({ where: { id: businessId }, data: { chat_count: { increment: 1 } } });
         return;
       }
 
@@ -306,6 +325,7 @@ export class WebhookController {
         } else {
           await whatsappService.sendTextMessage(customerPhone, bookingResult.replyText);
         }
+        await prisma.business.update({ where: { id: businessId }, data: { chat_count: { increment: 1 } } });
         return;
       }
 
@@ -333,6 +353,7 @@ export class WebhookController {
 
       // Send to WhatsApp
       await whatsappService.sendTextMessage(customerPhone, aiReply);
+      await prisma.business.update({ where: { id: businessId }, data: { chat_count: { increment: 1 } } });
     } catch (err: any) {
       console.error('[Webhook] Inbound message processing error:', err);
     }
