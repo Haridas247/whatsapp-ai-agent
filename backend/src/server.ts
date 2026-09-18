@@ -24,18 +24,23 @@ app.get('/health', (req, res) => {
 });
 
 // Meta WhatsApp Cloud Webhooks (supporting both /api/webhooks and /webhooks paths)
-app.get(['/api/webhooks/whatsapp', '/webhooks/whatsapp'], (req, res) => {
+app.get(['/api/webhooks/whatsapp', '/api/webhook/whatsapp', '/webhooks/whatsapp'], (req, res) => {
   webhookController.verify(req, res);
 });
 
-app.post(['/api/webhooks/whatsapp', '/webhooks/whatsapp'], async (req, res) => {
+app.post(['/api/webhooks/whatsapp', '/api/webhook/whatsapp', '/webhooks/whatsapp'], async (req, res) => {
   await webhookController.handleInbound(req, res);
 });
+
+import { authMiddleware } from './middleware/auth.middleware';
 
 // Auth API Routes
 app.post('/api/auth/signup', (req, res) => authController.signup(req, res));
 app.post('/api/auth/login', (req, res) => authController.login(req, res));
 app.post('/api/auth/change-password', (req, res) => authController.changePassword(req, res));
+
+// Apply auth middleware to all routes below this point
+app.use('/api', authMiddleware);
 
 // Admin REST API Routes
 app.get('/api/dashboard/stats', (req, res) => apiController.getDashboardStats(req, res));

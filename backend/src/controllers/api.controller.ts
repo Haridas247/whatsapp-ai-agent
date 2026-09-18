@@ -8,11 +8,14 @@ import { startOfDay, endOfDay } from 'date-fns';
 
 export class ApiController {
   /**
-   * Helper to get active business
+   * Helper to get active business from JWT
    */
-  private async getBusiness() {
-    const biz = await prisma.business.findFirst({ where: { status: 'ACTIVE' } });
-    if (!biz) throw new Error('No active business found');
+  private async getBusiness(req: any) {
+    if (!req.user || !req.user.businessId) {
+      throw new Error('Unauthorized');
+    }
+    const biz = await prisma.business.findUnique({ where: { id: req.user.businessId } });
+    if (!biz) throw new Error('Business not found');
     return biz;
   }
 
@@ -21,7 +24,7 @@ export class ApiController {
    */
   public async getDashboardStats(req: Request, res: Response) {
     try {
-      const biz = await prisma.business.findFirst({ where: { status: 'ACTIVE' } });
+      const biz = await this.getBusiness(req);
       if (!biz) return res.status(404).json({ error: 'Business not found' });
 
       const todayStart = startOfDay(new Date());
@@ -89,7 +92,7 @@ export class ApiController {
    */
   public async getAppointments(req: Request, res: Response) {
     try {
-      const biz = await prisma.business.findFirst({ where: { status: 'ACTIVE' } });
+      const biz = await this.getBusiness(req);
       if (!biz) return res.status(404).json({ error: 'Business not found' });
 
       const { status, date } = req.query;
@@ -147,7 +150,7 @@ export class ApiController {
    */
   public async getConversations(req: Request, res: Response) {
     try {
-      const biz = await prisma.business.findFirst({ where: { status: 'ACTIVE' } });
+      const biz = await this.getBusiness(req);
       if (!biz) return res.status(404).json({ error: 'Business not found' });
 
       const { status } = req.query;
@@ -290,7 +293,7 @@ export class ApiController {
    */
   public async clearAllConversations(req: Request, res: Response) {
     try {
-      const biz = await prisma.business.findFirst({ where: { status: 'ACTIVE' } });
+      const biz = await this.getBusiness(req);
       if (!biz) return res.status(404).json({ error: 'Business not found' });
       await prisma.message.deleteMany({
         where: { conversation: { business_id: biz.id } },
@@ -309,7 +312,7 @@ export class ApiController {
    */
   public async getKnowledge(req: Request, res: Response) {
     try {
-      const biz = await prisma.business.findFirst({ where: { status: 'ACTIVE' } });
+      const biz = await this.getBusiness(req);
       if (!biz) return res.status(404).json({ error: 'Business not found' });
 
       const documents = await prisma.knowledgeDocument.findMany({
@@ -333,7 +336,7 @@ export class ApiController {
    */
   public async createKnowledgeDocument(req: Request, res: Response) {
     try {
-      const biz = await prisma.business.findFirst({ where: { status: 'ACTIVE' } });
+      const biz = await this.getBusiness(req);
       if (!biz) return res.status(404).json({ error: 'Business not found' });
 
       const { title, content } = req.body;
@@ -365,7 +368,7 @@ export class ApiController {
    */
   public async uploadPdfKnowledge(req: Request, res: Response) {
     try {
-      const biz = await prisma.business.findFirst({ where: { status: 'ACTIVE' } });
+      const biz = await this.getBusiness(req);
       if (!biz) return res.status(404).json({ error: 'Business not found' });
 
       const { title, base64Pdf, filename } = req.body;
@@ -444,7 +447,7 @@ export class ApiController {
    */
   public async getServices(req: Request, res: Response) {
     try {
-      const biz = await prisma.business.findFirst({ where: { status: 'ACTIVE' } });
+      const biz = await this.getBusiness(req);
       if (!biz) return res.status(404).json({ error: 'Business not found' });
 
       const services = await prisma.service.findMany({
@@ -463,7 +466,7 @@ export class ApiController {
    */
   public async createOrUpdateService(req: Request, res: Response) {
     try {
-      const biz = await prisma.business.findFirst({ where: { status: 'ACTIVE' } });
+      const biz = await this.getBusiness(req);
       if (!biz) return res.status(404).json({ error: 'Business not found' });
 
       const { id, name, duration_minutes, price, status } = req.body;
@@ -498,7 +501,7 @@ export class ApiController {
   public async getBusinessProfile(req: Request, res: Response) {
     try {
       const biz = await prisma.business.findFirst({
-        where: { status: 'ACTIVE' },
+        where: { id: (req as any).user.businessId },
         include: { staff: true },
       });
       res.json(biz);
@@ -578,7 +581,7 @@ export class ApiController {
       await webhookController.handleInbound(mockReq, mockRes);
 
       // Fetch the conversation and latest assistant reply
-      const biz = await prisma.business.findFirst({ where: { status: 'ACTIVE' } });
+      const biz = await this.getBusiness(req);
       const cust = await prisma.customer.findFirst({ where: { business_id: biz?.id, phone } });
       const conv = await prisma.conversation.findFirst({
         where: { business_id: biz?.id, customer_id: cust?.id },
@@ -612,6 +615,10 @@ export class ApiController {
    */
   public async getBusinesses(req: Request, res: Response) {
     try {
+      if ((req as any).user?.role !== 'SUPERADMIN') {
+        return res.status(403).json({ error: 'Forbidden: Superadmin access required' });
+      }
+
       const businesses = await prisma.business.findMany({
         include: {
           staff: true,

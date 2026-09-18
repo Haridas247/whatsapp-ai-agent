@@ -6,8 +6,8 @@ export default function BlogsPage() {
       <section className="py-24 bg-white px-4 sm:px-6 lg:px-8 flex-1">
         <div className="max-w-7xl mx-auto space-y-16">
           <div className="text-center max-w-2xl mx-auto">
-            <h2 className="text-4xl md:text-5xl font-serif text-slate-900">Our Blog</h2>
-            <p className="text-slate-600 mt-4 text-lg">Insights, updates, and thoughts on AI in the medical space.</p>
+            <h2 className="text-4xl md:text-5xl font-serif text-slate-900">Latest from the Blog</h2>
+            <p className="text-slate-600 mt-4 text-lg">Insights, updates, and thoughts on AI for modern businesses.</p>
           </div>
           
           <div className="flex justify-center mt-12">

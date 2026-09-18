@@ -69,16 +69,16 @@ class GeminiService {
       };
     }
 
-    const systemPrompt = `You are an AI intent analyzer for a medical and dental clinic WhatsApp receptionist assistant in India.
+    const systemPrompt = `You are an AI intent analyzer for a business WhatsApp assistant in India.
 Your job is to analyze the user's message and determine:
 1. Intent:
-   - "EMERGENCY": Severe acute medical emergency (chest pain, heavy bleeding, loss of consciousness, choking).
-   - "HUMAN_AGENT": Customer explicitly requests human assistance, receptionist, phone call, or speaking to clinic staff.
+   - "EMERGENCY": Severe acute emergency.
+   - "HUMAN_AGENT": Customer explicitly requests human assistance, phone call, or speaking to business staff.
    - "BOOKING": Customer wants to book an appointment, check slot availability, or asks for appointment timing/date (e.g., "appointment venum", "Tuesday 5pm slot iruka?", "book tomorrow").
    - "CANCEL_RESCHEDULE": Customer wants to cancel or reschedule an existing appointment.
    - "GREETING": Hello, hi, vanakkam, good morning/evening without a specific question.
-   - "FAQ": Question about clinic fees, doctor availability, location, timings, treatments, procedures.
-2. Language: "en" (English), "ta" (Tamil script), or "tanglish" (Tamil written in English script like "doctor irukaara?").
+   - "FAQ": Question about business fees, staff availability, location, timings, services, procedures.
+2. Language: "en" (English), "ta" (Tamil script), or "tanglish" (Tamil written in English script).
 3. Extracted Details: If booking related, extract serviceName, requestedDate, requestedTime, customerName if present.
 
 Return ONLY a JSON object with this exact structure:
@@ -150,7 +150,7 @@ Return ONLY a JSON object with this exact structure:
     if (
       lower.includes('human') ||
       lower.includes('receptionist') ||
-      lower.includes('doctor direct') ||
+      lower.includes('staff') ||
       lower.includes('speak to staff') ||
       lower.includes('call me')
     ) {
@@ -175,8 +175,93 @@ Return ONLY a JSON object with this exact structure:
     ) {
       return { intent: 'GREETING', language, isEmergency: false };
     }
-
+    
     return { intent: 'FAQ', language, isEmergency: false };
+  }
+
+  /**
+   * Transcribes audio using Gemini 1.5 Pro and analyzes the intent in one go
+   */
+  public async transcribeAudioAndAnalyzeIntent(
+    audioBuffer: Buffer,
+    mimeType: string,
+    history: ConversationContextMessage[] = []
+  ): Promise<{ transcribedText: string; analysis: IntentAnalysisResult }> {
+    const systemPrompt = `You are an AI intent analyzer for a business WhatsApp assistant.
+The user has sent a voice note. First, carefully transcribe what they said. Then analyze the intent.
+1. Intent:
+   - "EMERGENCY": Severe acute medical emergency (chest pain, heavy bleeding, loss of consciousness, choking).
+   - "HUMAN_AGENT": Customer explicitly requests human assistance, receptionist, phone call, or speaking to staff.
+   - "BOOKING": Customer wants to book an appointment, check slot availability, or asks for appointment timing/date (e.g., "appointment venum", "Tuesday 5pm slot iruka?", "book tomorrow").
+   - "CANCEL_RESCHEDULE": Customer wants to cancel or reschedule an existing appointment.
+   - "GREETING": Hello, hi, vanakkam, good morning/evening without a specific question.
+   - "FAQ": Question about fees, availability, location, timings, services.
+2. Language: "en" (English), "ta" (Tamil script), or "tanglish" (Tamil written in English script).
+3. Extracted Details: If booking related, extract serviceName, requestedDate, requestedTime, customerName if present.
+
+Return ONLY a JSON object with this exact structure:
+{
+  "transcribedText": "What the user literally said in the audio",
+  "intent": "EMERGENCY" | "HUMAN_AGENT" | "BOOKING" | "CANCEL_RESCHEDULE" | "GREETING" | "FAQ",
+  "language": "en" | "ta" | "tanglish",
+  "isEmergency": boolean,
+  "emergencyReason": string | null,
+  "extractedDetails": {
+    "serviceName": string | null,
+    "requestedDate": string | null,
+    "requestedTime": string | null,
+    "customerName": string | null
+  }
+}`;
+
+    try {
+      if (config.GEMINI_API_KEY && config.GEMINI_API_KEY.trim().length > 10) {
+        const response = await ai.models.generateContent({
+          model: config.GEMINI_MODEL,
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                { text: systemPrompt },
+                {
+                  inlineData: {
+                    data: audioBuffer.toString('base64'),
+                    mimeType: mimeType || 'audio/ogg',
+                  },
+                },
+              ],
+            },
+          ],
+        });
+
+        const responseText = response.text?.trim() || '';
+        const cleanedJson = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+        const parsed = JSON.parse(cleanedJson);
+
+        return {
+          transcribedText: parsed.transcribedText || '[Voice Note]',
+          analysis: {
+            intent: parsed.intent || 'FAQ',
+            language: parsed.language || 'en',
+            isEmergency: Boolean(parsed.isEmergency),
+            emergencyReason: parsed.emergencyReason || undefined,
+            extractedDetails: {
+              serviceName: parsed.extractedDetails?.serviceName || undefined,
+              requestedDate: parsed.extractedDetails?.requestedDate || undefined,
+              requestedTime: parsed.extractedDetails?.requestedTime || undefined,
+              customerName: parsed.extractedDetails?.customerName || undefined,
+            },
+          },
+        };
+      }
+    } catch (error: any) {
+      console.error('[GeminiService] Audio transcription failed:', error.message);
+    }
+
+    return {
+      transcribedText: '[Voice Note Unreadable]',
+      analysis: { intent: 'FAQ', language: 'en', isEmergency: false },
+    };
   }
 
   /**
@@ -194,20 +279,19 @@ Return ONLY a JSON object with this exact structure:
         ? contextChunks.map((c, i) => `[Fact ${i + 1}]: ${c}`).join('\n\n')
         : 'NO_SPECIFIC_KNOWLEDGE_FOUND';
 
-    const systemInstruction = `You are "Aditi", the friendly, professional WhatsApp Business AI Receptionist for "${businessName}".
-Your mission: Help patients efficiently with clinic timings, consultation bookings, doctor schedules, treatments, and general clinic FAQs.
+    const systemInstruction = `You are "Aditi", the friendly, professional WhatsApp Business AI Assistant for "${businessName}".
+Your mission: Help customers efficiently with business timings, consultation bookings, staff schedules, services, and general FAQs.
 
-STRICT HEALTHCARE & SAFETY GUARDRAILS:
-1. You are an administrative assistant only. NEVER provide medical diagnosis, clinical opinions, or prescribe medicines.
-2. If the user asks for clinical advice (e.g., "what tablet should I take for tooth pain?"), advise them to consult the doctor directly during an in-person consultation and offer to book an appointment.
-3. ANTI-HALLUCINATION POLICY: Rely strictly on the PROVIDED CLINIC FACTS below. If the answer is NOT present in the facts, DO NOT invent prices, doctor names, or policies. Politely inform them that you will connect them with the human reception team.
-4. LANGUAGE MATCHING:
+STRICT GUARDRAILS:
+1. You are an administrative assistant only.
+2. ANTI-HALLUCINATION POLICY: Rely strictly on the PROVIDED FACTS below. If the answer is NOT present in the facts, DO NOT invent prices, staff names, or policies. Politely inform them that you will connect them with the human team.
+3. LANGUAGE MATCHING:
    - If the user writes in English, reply in clear, professional English.
    - If the user writes in Tamil script, reply in polite Tamil.
-   - If the user writes in Tanglish (Tamil in English alphabet, e.g., "Doctor eppo irupaaru?", "Appointment venum"), reply in natural, friendly Tanglish (e.g., "Vanakkam! Doctor 9:00 AM le irundhu 7:00 PM varaikum irukaaru. Ungalukku appointment book panna vaa?").
-5. Keep WhatsApp replies concise, clean, using emojis where appropriate, and formatted with bullet points for readability.
+   - If the user writes in Tanglish (Tamil in English alphabet), reply in natural, friendly Tanglish (e.g., "Vanakkam! Ungalukku appointment book panna vaa?").
+4. Keep WhatsApp replies concise, clean, using emojis where appropriate, and formatted with bullet points for readability.
 
-PROVIDED CLINIC FACTS:
+PROVIDED FACTS:
 ${contextText}`;
 
     try {
@@ -251,20 +335,18 @@ ${contextText}`;
           `• Monday to Saturday: *9:00 AM - 7:00 PM*\n` +
           `• Lunch break: 1:00 PM - 2:00 PM\n` +
           `• Sunday: Closed (Leave)\n\n` +
-          `Ungalukku Dr. Kumar kitta appointment book panna vaa? "Book appointment" nu reply pannunga!`
+          `Ungalukku appointment book panna vaa? "Book appointment" nu reply pannunga!`
         );
       }
     }
 
     if (lower.includes('cost') || lower.includes('fee') || lower.includes('price') || lower.includes('evlo') || lower.includes('charge')) {
       return (
-        `Vanakkam! 🙏 Here are the consultation & treatment charges at *${businessName}*:\n\n` +
-        `• *Doctor Consultation*: ₹500\n` +
-        `• *Teeth Cleaning & Polishing*: ₹1,200\n` +
-        `• *Laser Teeth Whitening*: ₹3,000\n` +
-        `• *Root Canal Treatment (RCT)*: ₹4,500\n` +
-        `• *Dental Fillings*: ₹1,000\n\n` +
-        `We accept UPI (GPay/PhonePe), Cards, Cash & Insurance. Would you like to book a slot?`
+        `Vanakkam! 🙏 Here are the general service charges at *${businessName}*:\n\n` +
+        `• *Standard Service/Consultation*: ₹500\n` +
+        `• *Advanced Service*: ₹1,200\n` +
+        `• *Premium Service*: ₹3,000\n\n` +
+        `We accept UPI (GPay/PhonePe), Cards, and Cash. Would you like to book a slot?`
       );
     }
 
@@ -290,10 +372,10 @@ ${contextText}`;
     return (
       `Vanakkam! Welcome to *${businessName}*.\n\n` +
       `How can I help you today? You can:\n` +
-      `1. Check clinic timings & doctor availability\n` +
-      `2. View consultation & treatment fees\n` +
+      `1. Check business timings & staff availability\n` +
+      `2. View service fees\n` +
       `3. Book an appointment slot\n` +
-      `4. Request human receptionist assistance`
+      `4. Request human assistance`
     );
   }
 
@@ -302,13 +384,12 @@ ${contextText}`;
    */
   public getEmergencyMessage(businessPhone: string): string {
     return (
-      `🚨 *EMERGENCY MEDICAL ALERT* 🚨\n\n` +
-      `We have detected that you or someone with you may be experiencing a medical emergency.\n\n` +
+      `🚨 *EMERGENCY ALERT* 🚨\n\n` +
+      `We have detected an emergency situation in your message.\n\n` +
       `⚠️ *Please do not wait for a chat reply.* Immediate emergency action is required:\n` +
       `1. Call national emergency services (*108* or *112*) immediately.\n` +
-      `2. Or call our emergency line directly at: *${businessPhone}*\n` +
-      `3. If possible, proceed to the nearest hospital casualty/emergency room.\n\n` +
-      `A human clinic staff member has also been alerted right now.`
+      `2. Or call our line directly at: *${businessPhone}*\n\n` +
+      `A human staff member has also been alerted right now.`
     );
   }
 }
