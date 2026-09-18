@@ -1,0 +1,233 @@
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [vector]
+}
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+enum ConversationStatus {
+  BOT
+  HUMAN_HANDOFF
+  RESOLVED
+}
+
+enum MessageSender {
+  CUSTOMER
+  ASSISTANT
+  HUMAN
+}
+
+enum AppointmentStatus {
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum ReminderType {
+  REMINDER_24H
+  REMINDER_2H
+}
+
+enum ReminderStatus {
+  PENDING
+  SENT
+  CANCELLED
+}
+
+model Business {
+  id                       String   @id @default(uuid())
+  name                     String
+  category                 String   @default("Dental Clinic")
+  phone                    String
+  timezone                 String   @default("Asia/Kolkata")
+  address                  String
+  status                   String   @default("ACTIVE")
+  whatsapp_phone_number_id String?
+  created_at               DateTime @default(now())
+  updated_at               DateTime @updatedAt
+
+  users               User[]
+  customers           Customer[]
+  conversations       Conversation[]
+  services            Service[]
+  staff               Staff[]
+  appointments        Appointment[]
+  knowledge_documents KnowledgeDocument[]
+  knowledge_chunks    KnowledgeChunk[]
+
+  @@map("businesses")
+}
+
+model User {
+  id            String   @id @default(uuid())
+  business_id   String
+  name          String
+  email         String   @unique
+  password_hash String
+  role          String   @default("ADMIN")
+  created_at    DateTime @default(now())
+
+  business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
+
+  @@index([business_id])
+  @@map("users")
+}
+
+model Customer {
+  id          String   @id @default(uuid())
+  business_id String
+  name        String
+  phone       String
+  metadata    Json?
+  created_at  DateTime @default(now())
+
+  business      Business       @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+  appointments  Appointment[]
+
+  @@unique([business_id, phone])
+  @@index([business_id])
+  @@map("customers")
+}
+
+model Conversation {
+  id          String             @id @default(uuid())
+  business_id String
+  customer_id String
+  status      ConversationStatus @default(BOT)
+  state_step  String             @default("START")
+  state_data  Json?
+  created_at  DateTime           @default(now())
+  updated_at  DateTime           @updatedAt
+
+  business Business  @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  customer Customer  @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([business_id])
+  @@index([customer_id])
+  @@map("conversations")
+}
+
+model Message {
+  id              String        @id @default(uuid())
+  conversation_id String
+  sender          MessageSender
+  message         String
+  message_type    String        @default("text")
+  metadata        Json?
+  created_at      DateTime      @default(now())
+
+  conversation Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+
+  @@index([conversation_id])
+  @@map("messages")
+}
+
+model Service {
+  id               String   @id @default(uuid())
+  business_id      String
+  name             String
+  duration_minutes Int      @default(30)
+  price            Float
+  status           String   @default("ACTIVE")
+  created_at       DateTime @default(now())
+
+  business     Business      @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@index([business_id])
+  @@map("services")
+}
+
+model Staff {
+  id                    String   @id @default(uuid())
+  business_id           String
+  name                  String
+  role                  String   @default("Doctor")
+  availability_schedule Json
+  created_at            DateTime @default(now())
+
+  business     Business      @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@index([business_id])
+  @@map("staff")
+}
+
+model Appointment {
+  id          String            @id @default(uuid())
+  business_id String
+  customer_id String
+  service_id  String
+  staff_id    String
+  start_at    DateTime
+  end_at      DateTime
+  status      AppointmentStatus @default(CONFIRMED)
+  notes       String?
+  created_at  DateTime          @default(now())
+  updated_at  DateTime          @updatedAt
+
+  business  Business   @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  customer  Customer   @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  service   Service    @relation(fields: [service_id], references: [id], onDelete: Cascade)
+  staff     Staff      @relation(fields: [staff_id], references: [id], onDelete: Cascade)
+  reminders Reminder[]
+
+  @@index([business_id])
+  @@index([customer_id])
+  @@index([staff_id, start_at])
+  @@map("appointments")
+}
+
+model KnowledgeDocument {
+  id          String   @id @default(uuid())
+  business_id String
+  title       String
+  content     String
+  status      String   @default("ACTIVE")
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  business Business         @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  chunks   KnowledgeChunk[]
+
+  @@index([business_id])
+  @@map("knowledge_documents")
+}
+
+model KnowledgeChunk {
+  id          String                 @id @default(uuid())
+  document_id String
+  business_id String
+  content     String
+  embedding   Unsupported("vector(768)")?
+  created_at  DateTime               @default(now())
+
+  document KnowledgeDocument @relation(fields: [document_id], references: [id], onDelete: Cascade)
+  business Business          @relation(fields: [business_id], references: [id], onDelete: Cascade)
+
+  @@index([business_id])
+  @@index([document_id])
+  @@map("knowledge_chunks")
+}
+
+model Reminder {
+  id             String         @id @default(uuid())
+  appointment_id String
+  reminder_type  ReminderType
+  scheduled_at   DateTime
+  status         ReminderStatus @default(PENDING)
+  created_at     DateTime       @default(now())
+
+  appointment Appointment @relation(fields: [appointment_id], references: [id], onDelete: Cascade)
+
+  @@index([appointment_id])
+  @@index([scheduled_at, status])
+  @@map("reminders")
+}
