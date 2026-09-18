@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
 export class AuthController {
   public async signup(req: Request, res: Response) {
@@ -43,7 +44,25 @@ export class AuthController {
         return { business: biz, user: usr };
       });
 
-      res.json({ success: true, businessId: business.id, userId: user.id });
+      // Generate JWT Token
+      const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_for_development';
+      const token = jwt.sign(
+        { 
+          userId: user.id, 
+          businessId: business.id, 
+          role: user.role 
+        }, 
+        JWT_SECRET, 
+        { expiresIn: '7d' }
+      );
+
+      res.json({ 
+        success: true, 
+        businessId: business.id, 
+        userId: user.id,
+        token,
+        role: user.role
+      });
     } catch (err: any) {
       console.error('Signup error:', err);
       res.status(500).json({ error: err.message });
@@ -103,20 +122,26 @@ export class AuthController {
         return res.status(401).json({ error: 'Invalid email or password' });
       }
 
-      // Deactivate all businesses globally
-      await prisma.business.updateMany({
-        data: { status: 'INACTIVE' },
-      });
+      // Generate JWT Token
+      const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_for_development';
+      const token = jwt.sign(
+        { 
+          userId: user.id, 
+          businessId: user.business_id, 
+          role: user.role 
+        }, 
+        JWT_SECRET, 
+        { expiresIn: '7d' }
+      );
 
-      // Activate this user's business
-      const activeBiz = await prisma.business.update({
-        where: { id: user.business_id },
-        data: { status: 'ACTIVE' },
-      });
-
-      console.log(`[Multi-Tenant] Active business switched to: ${activeBiz.name} via Login`);
+      console.log(`[Auth] User logged in: ${user.email} (Business: ${user.business?.name})`);
       
-      res.json({ success: true, businessId: activeBiz.id });
+      res.json({ 
+        success: true, 
+        businessId: user.business_id,
+        token,
+        role: user.role
+      });
     } catch (err: any) {
       console.error('Login error:', err);
       res.status(500).json({ error: err.message });

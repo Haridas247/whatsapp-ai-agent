@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -15,6 +15,11 @@ export default function SignupPage() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Clear token when visiting signup page
+  useEffect(() => {
+    localStorage.removeItem('agent_auth_token');
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -35,6 +40,10 @@ export default function SignupPage() {
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || 'Failed to register');
+      }
+
+      if (data.token) {
+        localStorage.setItem('agent_auth_token', data.token);
       }
 
       router.push('/admin'); // Redirect to dashboard after signup

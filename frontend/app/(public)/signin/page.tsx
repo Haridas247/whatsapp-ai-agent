@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -12,6 +12,11 @@ export default function LoginPage() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Clear token when visiting signin page (effectively logging out)
+  useEffect(() => {
+    localStorage.removeItem('agent_auth_token');
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -32,6 +37,10 @@ export default function LoginPage() {
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || 'Failed to login');
+      }
+
+      if (data.token) {
+        localStorage.setItem('agent_auth_token', data.token);
       }
 
       router.push('/admin'); // Redirect to dashboard after login
