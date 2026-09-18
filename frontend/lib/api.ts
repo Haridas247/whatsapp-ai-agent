@@ -13,6 +13,12 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
+    
+    // Attach explicit superadmin tenant override if set
+    const switchBiz = localStorage.getItem('superadmin_active_tenant');
+    if (switchBiz) {
+      headers['x-business-id'] = switchBiz;
+    }
   }
 
   const response = await fetch(url, {

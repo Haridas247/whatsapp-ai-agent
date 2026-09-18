@@ -24,11 +24,11 @@ app.get('/health', (req, res) => {
 });
 
 // Meta WhatsApp Cloud Webhooks (supporting both /api/webhooks and /webhooks paths)
-app.get(['/api/webhooks/whatsapp', '/webhooks/whatsapp'], (req, res) => {
+app.get(['/api/webhooks/whatsapp', '/api/webhook/whatsapp', '/webhooks/whatsapp'], (req, res) => {
   webhookController.verify(req, res);
 });
 
-app.post(['/api/webhooks/whatsapp', '/webhooks/whatsapp'], async (req, res) => {
+app.post(['/api/webhooks/whatsapp', '/api/webhook/whatsapp', '/webhooks/whatsapp'], async (req, res) => {
   await webhookController.handleInbound(req, res);
 });
 

@@ -18,14 +18,21 @@ export default function TenantSelector() {
   const [activeBiz, setActiveBiz] = useState<Business | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
+  const [isSuperadmin, setIsSuperadmin] = useState(false);
 
   const loadBusinesses = async () => {
     try {
       const data = await fetchApi('/api/businesses');
       if (Array.isArray(data)) {
         setBusinesses(data);
-        const active = data.find((b) => b.status === 'ACTIVE') || data[0];
-        setActiveBiz(active || null);
+        
+        const storedId = localStorage.getItem('superadmin_active_tenant');
+        if (storedId) {
+          const match = data.find(b => b.id === storedId);
+          if (match) setActiveBiz(match);
+        } else {
+          setActiveBiz(data[0]);
+        }
       }
     } catch (err) {
       console.error('Failed to load businesses:', err);
@@ -33,7 +40,11 @@ export default function TenantSelector() {
   };
 
   useEffect(() => {
-    loadBusinesses();
+    const role = localStorage.getItem('agent_auth_role');
+    if (role === 'SUPERADMIN') {
+      setIsSuperadmin(true);
+      loadBusinesses();
+    }
   }, []);
 
   const handleSelectBusiness = async (biz: Business) => {
@@ -42,22 +53,16 @@ export default function TenantSelector() {
       return;
     }
 
-    try {
-      setSwitching(true);
-      await fetchApi('/api/business/switch-active', {
-        method: 'POST',
-        body: JSON.stringify({ business_id: biz.id }),
-      });
-      setActiveBiz(biz);
-      setIsOpen(false);
-      // Reload page to re-render all dashboard panels for the newly selected tenant
-      window.location.reload();
-    } catch (err) {
-      console.error('Failed to switch business tenant:', err);
-    } finally {
-      setSwitching(false);
-    }
+    setSwitching(true);
+    localStorage.setItem('superadmin_active_tenant', biz.id);
+    setActiveBiz(biz);
+    setIsOpen(false);
+    
+    // Reload page to re-render all dashboard panels for the newly selected tenant
+    window.location.reload();
   };
+
+  if (!isSuperadmin) return null;
 
   const isSalon = (cat?: string) => (cat || '').toLowerCase().includes('salon') || (cat || '').toLowerCase().includes('spa');
 

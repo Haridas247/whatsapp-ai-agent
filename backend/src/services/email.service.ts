@@ -1,116 +1,185 @@
 import { Resend } from 'resend';
-import { config } from '../config/env';
-import { format } from 'date-fns';
 
-const resend = new Resend(config.RESEND_API_KEY || 're_dummy_key'); // Fallback for dev
+// Use a placeholder if no environment variable is provided during development
+const resend = new Resend(process.env.RESEND_API_KEY || 're_placeholder_123');
+
+// Default sender email (this must be verified in Resend dashboard)
+const SENDER_EMAIL = process.env.RESEND_SENDER_EMAIL || 'onboarding@resend.dev';
 
 export class EmailService {
   /**
-   * Sends an email notification to the customer about their appointment
+   * Send Booking Confirmation Email
    */
-  public async sendCustomerConfirmation(
-    customerEmail: string,
+  public async sendBookingConfirmation(
+    to: string,
     customerName: string,
+    clinicName: string,
     serviceName: string,
-    staffName: string,
-    startAt: Date,
-    businessName: string
+    appointmentTime: string
   ) {
-    if (!config.RESEND_API_KEY) {
-      console.log(`[Email Mock] Sent to ${customerEmail}: Appointment Confirmed!`);
-      return;
-    }
-
     try {
-      await resend.emails.send({
-        from: 'bookings@bizentrix.com', // Update this to a verified domain
-        to: customerEmail,
-        subject: `Your Appointment is Confirmed - ${businessName}`,
+      const { data, error } = await resend.emails.send({
+        from: `${clinicName} <${SENDER_EMAIL}>`,
+        to: [to],
+        subject: 'Your Appointment is Confirmed! 🎉',
         html: `
-          <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; color: #333;">
-            <h2 style="color: #0078D4;">Appointment Confirmed!</h2>
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 10px;">
+            <h2 style="color: #2563eb;">Appointment Confirmed</h2>
             <p>Hi ${customerName},</p>
-            <p>Your appointment has been successfully scheduled. Here are the details:</p>
-            <table style="background: #f3f2f1; padding: 15px; border-radius: 5px; width: 100%;">
-              <tr><td><strong>Service:</strong></td><td>${serviceName}</td></tr>
-              <tr><td><strong>Doctor/Staff:</strong></td><td>${staffName}</td></tr>
-              <tr><td><strong>Date & Time:</strong></td><td>${format(startAt, 'EEEE, MMM dd, yyyy @ hh:mm a')}</td></tr>
-            </table>
-            <p style="margin-top: 20px;">We look forward to seeing you at ${businessName}!</p>
+            <p>Your appointment at <strong>${clinicName}</strong> has been successfully booked!</p>
+            
+            <div style="background-color: #f8fafc; padding: 15px; border-radius: 5px; margin: 20px 0;">
+              <p style="margin: 0;"><strong>Service:</strong> ${serviceName}</p>
+              <p style="margin: 5px 0 0 0;"><strong>Time:</strong> ${appointmentTime}</p>
+            </div>
+            
+            <p>If you need to reschedule, please reply to our WhatsApp bot.</p>
+            <p>We look forward to seeing you!</p>
           </div>
         `,
       });
-      console.log(`[Email] Customer confirmation sent to ${customerEmail}`);
-    } catch (error) {
-      console.error('[Email Error] Failed to send customer email:', error);
+
+      if (error) console.error('[EmailService] Confirmation Error:', error);
+      return { data, error };
+    } catch (err) {
+      console.error('[EmailService] Failed to send confirmation email', err);
     }
   }
 
   /**
-   * Sends an email notification to the clinic admin about a new booking
+   * Send Booking Cancellation Email
    */
-  public async sendAdminNotification(
+  public async sendBookingCancellation(
+    to: string,
+    customerName: string,
+    clinicName: string,
+    serviceName: string,
+    appointmentTime: string
+  ) {
+    try {
+      const { data, error } = await resend.emails.send({
+        from: `${clinicName} <${SENDER_EMAIL}>`,
+        to: [to],
+        subject: 'Appointment Cancelled',
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 10px;">
+            <h2 style="color: #ef4444;">Appointment Cancelled</h2>
+            <p>Hi ${customerName},</p>
+            <p>Your appointment for <strong>${serviceName}</strong> at <strong>${clinicName}</strong> on <strong>${appointmentTime}</strong> has been cancelled as requested.</p>
+            <p>If you'd like to book another time, simply say "book appointment" to our WhatsApp bot!</p>
+          </div>
+        `,
+      });
+
+      if (error) console.error('[EmailService] Cancellation Error:', error);
+      return { data, error };
+    } catch (err) {
+      console.error('[EmailService] Failed to send cancellation email', err);
+    }
+  }
+
+  /**
+   * Send Appointment Reminder Email
+   */
+  public async sendAppointmentReminder(
+    to: string,
+    customerName: string,
+    clinicName: string,
+    serviceName: string,
+    appointmentTime: string
+  ) {
+    try {
+      const { data, error } = await resend.emails.send({
+        from: `${clinicName} <${SENDER_EMAIL}>`,
+        to: [to],
+        subject: 'Reminder: Upcoming Appointment 🗓️',
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 10px;">
+            <h2 style="color: #2563eb;">Appointment Reminder</h2>
+            <p>Hi ${customerName},</p>
+            <p>This is a friendly reminder for your upcoming appointment at <strong>${clinicName}</strong>.</p>
+            
+            <div style="background-color: #f8fafc; padding: 15px; border-radius: 5px; margin: 20px 0;">
+              <p style="margin: 0;"><strong>Service:</strong> ${serviceName}</p>
+              <p style="margin: 5px 0 0 0;"><strong>Time:</strong> ${appointmentTime}</p>
+            </div>
+            
+            <p>See you soon!</p>
+          </div>
+        `,
+      });
+
+      if (error) console.error('[EmailService] Reminder Error:', error);
+      return { data, error };
+    } catch (err) {
+      console.error('[EmailService] Failed to send reminder email', err);
+    }
+  }
+
+  /**
+   * Send Human Handoff Alert to Clinic Admin
+   */
+  public async sendHumanHandoffAlert(
     adminEmail: string,
     customerName: string,
-    customerPhone: string,
-    serviceName: string,
-    startAt: Date
+    clinicName: string,
+    customerPhone: string
   ) {
-    if (!config.RESEND_API_KEY) {
-      console.log(`[Email Mock] Sent to Admin (${adminEmail}): New Booking by ${customerName}`);
-      return;
-    }
-
     try {
-      await resend.emails.send({
-        from: 'system@bizentrix.com',
-        to: adminEmail,
-        subject: `New Appointment Booking - ${customerName}`,
+      const { data, error } = await resend.emails.send({
+        from: `AI Assistant <${SENDER_EMAIL}>`,
+        to: [adminEmail],
+        subject: `ACTION REQUIRED: Human Handoff requested by ${customerName} 🚨`,
         html: `
-          <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; color: #333;">
-            <h2 style="color: #107c41;">New Appointment Received</h2>
-            <p>A new appointment has been booked via the WhatsApp AI Assistant.</p>
-            <table style="background: #f3f2f1; padding: 15px; border-radius: 5px; width: 100%;">
-              <tr><td><strong>Patient/Customer:</strong></td><td>${customerName} (${customerPhone})</td></tr>
-              <tr><td><strong>Service:</strong></td><td>${serviceName}</td></tr>
-              <tr><td><strong>Date & Time:</strong></td><td>${format(startAt, 'EEEE, MMM dd, yyyy @ hh:mm a')}</td></tr>
-            </table>
-            <p style="margin-top: 20px;">Log in to your Admin Dashboard to view more details.</p>
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 10px;">
+            <h2 style="color: #eab308;">Human Handoff Alert</h2>
+            <p>Hello <strong>${clinicName} Admin</strong>,</p>
+            <p>A customer requires live human assistance on WhatsApp.</p>
+            
+            <div style="background-color: #fefce8; padding: 15px; border-radius: 5px; margin: 20px 0; border: 1px solid #fef08a;">
+              <p style="margin: 0;"><strong>Customer Name:</strong> ${customerName}</p>
+              <p style="margin: 5px 0 0 0;"><strong>Phone:</strong> ${customerPhone}</p>
+            </div>
+            
+            <p>Please log in to your dashboard to take over the conversation.</p>
           </div>
         `,
       });
-      console.log(`[Email] Admin notification sent to ${adminEmail}`);
-    } catch (error) {
-      console.error('[Email Error] Failed to send admin email:', error);
+
+      if (error) console.error('[EmailService] Handoff Alert Error:', error);
+      return { data, error };
+    } catch (err) {
+      console.error('[EmailService] Failed to send handoff alert email', err);
     }
   }
-
+  
   /**
-   * Sends an email notification to the clinic admin when they reach their chat limit
+   * Send Limit Reached Notification
    */
-  public async sendLimitReachedNotification(adminEmail: string, businessName: string, limit: number) {
-    if (!config.RESEND_API_KEY) {
-      console.log(`[Email Mock] Sent to Admin (${adminEmail}): Chat Limit Reached for ${businessName}`);
-      return;
-    }
-
+  public async sendLimitReachedNotification(
+    adminEmail: string,
+    clinicName: string,
+    limit: number
+  ) {
     try {
-      await resend.emails.send({
-        from: 'system@bizentrix.com',
-        to: adminEmail,
-        subject: `⚠️ Action Required: AI Chat Limit Reached - ${businessName}`,
+      const { data, error } = await resend.emails.send({
+        from: `AI Assistant <${SENDER_EMAIL}>`,
+        to: [adminEmail],
+        subject: `WARNING: Conversation Limit Reached 🚨`,
         html: `
-          <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; color: #333;">
-            <h2 style="color: #d13438;">AI Chat Limit Reached</h2>
-            <p>Your WhatsApp AI Assistant has reached its monthly chat limit of <strong>${limit}</strong> messages.</p>
-            <p>The AI will no longer respond to new messages until your limit is increased or reset.</p>
-            <p style="margin-top: 20px;">Please contact support to upgrade your plan.</p>
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 10px;">
+            <h2 style="color: #ef4444;">Limit Reached</h2>
+            <p>Hello <strong>${clinicName} Admin</strong>,</p>
+            <p>Your clinic has reached the maximum allowed monthly AI conversations limit (${limit}).</p>
+            <p>Please upgrade your plan or contact support to continue using the AI assistant.</p>
           </div>
         `,
       });
-      console.log(`[Email] Limit reached notification sent to ${adminEmail}`);
-    } catch (error) {
-      console.error('[Email Error] Failed to send limit reached email:', error);
+
+      if (error) console.error('[EmailService] Limit Alert Error:', error);
+      return { data, error };
+    } catch (err) {
+      console.error('[EmailService] Failed to send limit alert email', err);
     }
   }
 }

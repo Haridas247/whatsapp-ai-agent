@@ -30,9 +30,6 @@ export default function PublicLayout({
               <Link href="/use-cases" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
                 Use Cases
               </Link>
-              <Link href="/pricing" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
-                Pricing
-              </Link>
               <Link href="/blogs" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
                 Blogs
               </Link>
@@ -42,7 +39,7 @@ export default function PublicLayout({
             <div className="flex items-center gap-6">
               <Link 
                 href="/signup" 
-                className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors"
+                className="text-sm font-bold bg-emerald-500 text-white px-5 py-2.5 rounded-full hover:bg-emerald-600 transition-colors shadow-md shadow-emerald-500/20"
               >
                 Sign Up
               </Link>

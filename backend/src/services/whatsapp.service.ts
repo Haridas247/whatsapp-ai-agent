@@ -19,9 +19,11 @@ export interface InboundWhatsAppMessage {
   from: string;
   name: string;
   messageId: string;
-  type: 'text' | 'interactive_button' | 'interactive_list' | 'unknown';
+  type: 'text' | 'interactive_button' | 'interactive_list' | 'audio' | 'unknown';
   text: string;
   buttonId?: string;
+  audioId?: string;
+  mimeType?: string;
   timestamp: string;
 }
 
@@ -110,6 +112,19 @@ class WhatsAppService {
             timestamp,
           };
         }
+      }
+
+      if (message.type === 'audio') {
+        return {
+          from,
+          name,
+          messageId,
+          type: 'audio',
+          text: '[Voice Note]',
+          audioId: message.audio?.id,
+          mimeType: message.audio?.mime_type,
+          timestamp,
+        };
       }
 
       return {
@@ -294,6 +309,44 @@ class WhatsAppService {
         error.response?.data || error.message
       );
       return false;
+    }
+  }
+
+  /**
+   * Downloads media from WhatsApp Servers (e.g., Audio Notes)
+   * Returns a Buffer containing the media binary data.
+   */
+  public async downloadMedia(mediaId: string): Promise<{ buffer: Buffer; mimeType: string } | null> {
+    if (!config.WHATSAPP_ACCESS_TOKEN) return null;
+
+    try {
+      // 1. Get media URL
+      const urlResponse = await axios.get(`https://graph.facebook.com/${config.WHATSAPP_API_VERSION}/${mediaId}`, {
+        headers: {
+          Authorization: `Bearer ${config.WHATSAPP_ACCESS_TOKEN}`,
+        },
+      });
+
+      const mediaUrl = urlResponse.data?.url;
+      const mimeType = urlResponse.data?.mime_type || 'audio/ogg';
+
+      if (!mediaUrl) return null;
+
+      // 2. Download binary data
+      const mediaResponse = await axios.get(mediaUrl, {
+        headers: {
+          Authorization: `Bearer ${config.WHATSAPP_ACCESS_TOKEN}`,
+        },
+        responseType: 'arraybuffer',
+      });
+
+      return {
+        buffer: Buffer.from(mediaResponse.data),
+        mimeType,
+      };
+    } catch (error: any) {
+      console.error('[WhatsAppService] Error downloading media:', error.message);
+      return null;
     }
   }
 }

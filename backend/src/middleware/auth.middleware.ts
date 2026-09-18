@@ -27,6 +27,14 @@ export const authMiddleware = (req: AuthRequest, res: Response, next: NextFuncti
       role: decoded.role,
     };
 
+    // If user is SUPERADMIN and provided a tenant switch header, override the businessId
+    if (decoded.role === 'SUPERADMIN') {
+      const switchBusinessId = req.headers['x-business-id'] as string;
+      if (switchBusinessId) {
+        req.user.businessId = switchBusinessId;
+      }
+    }
+
     next();
   } catch (error) {
     return res.status(401).json({ error: 'Unauthorized: Invalid token' });

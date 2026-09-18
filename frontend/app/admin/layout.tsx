@@ -42,6 +42,11 @@ export default function RootLayout({
                 </p>
               </div>
             </div>
+            
+            {/* Superadmin Tenant Selector */}
+            <div className="mt-4">
+              <TenantSelector />
+            </div>
           </div>
 
           {/* Navigation Links */}

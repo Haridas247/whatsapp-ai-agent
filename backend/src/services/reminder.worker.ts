@@ -2,6 +2,7 @@ import { Queue, Worker, Job } from 'bullmq';
 import { redisConnection } from '../lib/redis';
 import { prisma } from '../lib/prisma';
 import { whatsappService } from './whatsapp.service';
+import { emailService } from './email.service';
 
 export interface ReminderJobData {
   appointmentId: string;
@@ -90,6 +91,20 @@ export const reminderWorker = new Worker<ReminderJobData>(
 
       // Dispatch WhatsApp message
       await whatsappService.sendTextMessage(appointment.customer.phone, messageText);
+
+      // Dispatch Email message
+      try {
+        const customerEmail = `${appointment.customer.name.replace(/\s+/g, '').toLowerCase() || 'customer'}@example.com`;
+        await emailService.sendAppointmentReminder(
+          customerEmail,
+          appointment.customer.name,
+          appointment.business.name,
+          appointment.service.name,
+          `${dateString} at ${timeString}`
+        );
+      } catch (emailErr) {
+        console.error('[ReminderWorker] Failed to send reminder email', emailErr);
+      }
 
       // Update DB record
       await prisma.reminder.updateMany({

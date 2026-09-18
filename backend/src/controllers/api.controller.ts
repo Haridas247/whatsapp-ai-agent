@@ -615,6 +615,10 @@ export class ApiController {
    */
   public async getBusinesses(req: Request, res: Response) {
     try {
+      if ((req as any).user?.role !== 'SUPERADMIN') {
+        return res.status(403).json({ error: 'Forbidden: Superadmin access required' });
+      }
+
       const businesses = await prisma.business.findMany({
         include: {
           staff: true,

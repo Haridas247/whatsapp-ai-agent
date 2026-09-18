@@ -152,7 +152,7 @@ export class WebhookController {
       }
 
       // 4. Parallelize recording inbound message and fetching recent history for intent analysis
-      const [, recentMessages] = await Promise.all([
+      const [customerMsg, recentMessages] = await Promise.all([
         prisma.message.create({
           data: {
             conversation_id: conversation.id,
@@ -162,6 +162,7 @@ export class WebhookController {
             metadata: {
               messageId: parsed.messageId,
               buttonId: parsed.buttonId,
+              audioId: parsed.audioId,
             },
           },
         }),
@@ -196,7 +197,31 @@ export class WebhookController {
         content: m.message,
       }));
 
-      const analysis = await geminiService.analyzeIntent(parsed.text, history);
+      let userText = parsed.text;
+      let analysis;
+
+      if (parsed.type === 'audio' && parsed.audioId) {
+        console.log(`[Webhook] Audio message received. Downloading mediaId: ${parsed.audioId}`);
+        const media = await whatsappService.downloadMedia(parsed.audioId);
+        
+        if (media) {
+           const result = await geminiService.transcribeAudioAndAnalyzeIntent(media.buffer, media.mimeType, history);
+           userText = `[Transcribed Voice Note]: ${result.transcribedText}`;
+           analysis = result.analysis;
+           console.log(`[Webhook] Transcribed Audio: "${userText}"`);
+           
+           // Update the message in DB with transcription
+           await prisma.message.update({
+             where: { id: customerMsg.id },
+             data: { message: userText }
+           });
+        } else {
+           userText = "[Voice Note Unreadable - Failed to Download]";
+           analysis = { intent: 'FAQ', language: 'en', isEmergency: false } as any;
+        }
+      } else {
+        analysis = await geminiService.analyzeIntent(userText, history);
+      }
 
       if (analysis.isEmergency || analysis.intent === 'EMERGENCY') {
         const emergencyAlert = geminiService.getEmergencyMessage(business.phone);
@@ -219,7 +244,7 @@ export class WebhookController {
       }
 
       // 8. Determine if user is actively performing a booking action
-      const lowerText = (parsed.text || '').toLowerCase();
+      const lowerText = (userText || '').toLowerCase();
       const hasBookingButton = Boolean(parsed.buttonId);
       const isBookingKeyword = /\b(book|appointment|slot|schedule|confirm|yes|aama|cancel|today|tomorrow|yesterday|monday|tuesday|wednesday|thursday|friday|saturday)\b/i.test(lowerText);
       const isTimeSlot = /^\d{1,2}(:\d{2})?\s*(am|pm)?$/i.test(lowerText.trim());
@@ -262,7 +287,7 @@ export class WebhookController {
           customerPhone,
           conversation.state_step,
           (conversation.state_data as any) || {},
-          parsed.text,
+          userText,
           parsed.buttonId
         );
 
@@ -300,7 +325,7 @@ export class WebhookController {
           customerPhone,
           'START',
           {},
-          parsed.text,
+          userText,
           parsed.buttonId
         );
 
@@ -333,7 +358,7 @@ export class WebhookController {
       const aiReply = await ragService.generateGroundedAnswer({
         businessId,
         businessName: business.name,
-        userMessage: parsed.text,
+        userMessage: userText,
         history,
         languageHint: analysis.language,
       });

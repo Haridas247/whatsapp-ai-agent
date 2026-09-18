@@ -404,9 +404,9 @@ export class BookingService {
       return {
         replyText:
           `📋 *Appointment Summary:*\n\n` +
-          `• *Patient*: Customer\n` +
+          `• *Customer*: ${stateData.customerName || 'Customer'}\n` +
           `• *Service*: ${stateData.serviceName || 'Consultation'}\n` +
-          `• *Doctor*: ${stateData.staffName || 'Dr. Kumar'}\n` +
+          `• *Professional*: ${stateData.staffName || 'Staff Member'}\n` +
           `• *Timing*: ${formattedSlot}\n` +
           `• *Fee*: ₹${stateData.price || 500}\n\n` +
           `Shall I confirm and lock this appointment for you?`,
@@ -452,23 +452,22 @@ export class BookingService {
           try {
             // Customer email (mocking email as customer.name @ example.com for demo)
             const customerEmail = `${conv?.customer.name.replace(/\s+/g, '').toLowerCase() || 'customer'}@example.com`;
-            await emailService.sendCustomerConfirmation(
+            await emailService.sendBookingConfirmation(
               customerEmail,
               conv!.customer.name,
+              conv!.business.name,
               stateData.serviceName!,
-              stateData.staffName!,
-              startAt,
-              conv!.business.name
+              format(startAt, 'EEEE, MMM dd @ hh:mm a')
             );
 
             // Admin email (mocking admin email)
             const adminEmail = `admin@${conv!.business.name.replace(/\s+/g, '').toLowerCase()}.com`;
-            await emailService.sendAdminNotification(
+            // Sending the admin a handoff/booking alert (using handoff alert as generic admin alert for now)
+            await emailService.sendHumanHandoffAlert(
               adminEmail,
               conv!.customer.name,
-              conv!.customer.phone,
-              stateData.serviceName!,
-              startAt
+              conv!.business.name,
+              conv!.customer.phone
             );
           } catch (emailErr) {
             console.error('[BookingService] Email notification failed:', emailErr);
@@ -489,14 +488,14 @@ export class BookingService {
             replyText:
               `🎉 *Appointment Confirmed!* 🎉\n\n` +
               `Appointment ID: *#${appointment.id.slice(0, 8).toUpperCase()}*\n` +
-              `Patient: *${conv?.customer.name}*\n` +
-              `Doctor: *${stateData.staffName}*\n` +
+              `Customer: *${conv?.customer.name}*\n` +
+              `Professional: *${stateData.staffName}*\n` +
               `Service: *${stateData.serviceName}*\n` +
               `When: *${timingStr}*\n` +
               `Address: *${conv?.business.address}*\n\n` +
-              `We have scheduled reminder alerts before your visit. Nandri! We look forward to seeing you.`,
+              `We have scheduled reminder alerts before your visit. Thank you! We look forward to seeing you.`,
             buttons: [
-              { id: 'FAQ_TIMINGS', title: 'Clinic Timings 🕒' },
+              { id: 'FAQ_TIMINGS', title: 'Business Timings 🕒' },
               { id: 'FAQ_LOCATION', title: 'Get Directions 📍' },
             ],
           };
@@ -529,7 +528,7 @@ export class BookingService {
 
     // Default fallback
     return {
-      replyText: `How can I help you? You can book an appointment or ask questions about our clinic services.`,
+      replyText: `How can I help you? You can book an appointment or ask questions about our services.`,
     };
   }
 }
